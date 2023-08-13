@@ -1,0 +1,40 @@
+.board {
+    background: lightgrey;
+    align: center;
+    min-height: 100vh;
+    min-width: 30em;
+    color: green;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+tr {
+    border: none;
+    min-height: 400px;
+}
+
+td {
+    border: 2px solid black;
+    box-sizing: content-box;
+    padding: 10px;
+    min-width: 2em;
+    height: 3vh;
+}
+
+td:first-child {
+    border-left: none;
+}
+
+td:last-child {
+    border-right: none;
+}
+
+tr:first-child > td {
+    border-top: none;
+}
+
+tr:last-child > td {
+    border-bottom: none;
+}
