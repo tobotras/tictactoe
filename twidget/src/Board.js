@@ -3,19 +3,27 @@ import { useState, useEffect } from 'react';
 const emptyBoard = [[null, null, null],
                     [null, null, null],
                     [null, null, null]];
-var player;
-var setPlayer;
+
+function MoreMoves(board) {
+    return []
+        .concat(...board)
+        .filter(cell => cell === null)
+        .length > 0;
+}
 
 function Board({state}) {
-    
-    [player, setPlayer] = state
+    const [player, setPlayer] = state
     console.log("Playing the game");
 
     const [theBoard, setTheBoard] = useState(emptyBoard);
 
     useEffect(() => {
         console.log("Board changed, it is now " + theBoard);
-    }, [theBoard]);
+        if (!MoreMoves(theBoard)) {
+            alert("End of game!");
+            setPlayer(null);
+        }
+    }, [theBoard, setPlayer]);
 
     function getData() {
         console.log("Getting board");
@@ -69,7 +77,11 @@ function Board({state}) {
                 else
                     return resp.json();
             })
-            .then((data) => setTheBoard(data.board))
+            .then((data) => {
+                setTheBoard(data.board);
+                if (data.winner === player)
+                    alert('Wow! You won!');
+            })
             .catch((err) => {
                 console.log("Move error:" + err.message);
             });
@@ -80,7 +92,6 @@ function Board({state}) {
             return " ";
         return theBoard[x][y];
     }
-
 
     return(        
         <div className="board">
