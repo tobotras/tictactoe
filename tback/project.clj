@@ -8,6 +8,8 @@
                  [ring-logger "1.1.1"]
                  [ring/ring-json "0.5.1"]
                  [ring/ring-defaults "0.3.4"]
+                 [ring-sse-middleware "0.1.3"]
+                 [ring-cors "0.1.13"]
                  [compojure "1.7.0"]
                  [org.clojure/data.json "2.4.0"]]
   :main ^:skip-aot tback.core

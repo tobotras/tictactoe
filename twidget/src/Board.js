@@ -4,7 +4,15 @@ const emptyBoard = [[null, null, null],
                     [null, null, null],
                     [null, null, null]];
 
-function MoreMoves(board) {
+function streamToString(stream) {
+    const chunks = [];
+    for (let chunk of stream) {
+        chunks.push(chunk);
+    }
+    return chunks.join();
+}
+
+function moreMoves(board) {
     return []
         .concat(...board)
         .filter(cell => cell === null)
@@ -16,15 +24,42 @@ function Board({state}) {
     console.log("Playing the game");
 
     const [theBoard, setTheBoard] = useState(emptyBoard);
-
+    const [messages, setMessages] = useState([]);
+    
     useEffect(() => {
         console.log("Board changed, it is now " + theBoard);
-        if (!MoreMoves(theBoard)) {
+        if (!moreMoves(theBoard)) {
             alert("End of game!");
             setPlayer(null);
         }
     }, [theBoard, setPlayer]);
 
+    useEffect(() => {
+        async function fetchMessage() {
+            console.log('Starting event stream');
+            fetch('http://localhost:8080/events', {
+                headers: { Accept: 'text/event-stream' },
+                onopen(res) {
+                    if (res.ok)
+                        console.log("Connected to event source");
+                },
+                onmessage(event) {
+                    console.log("Got event: " + event.data);
+                    const parsed = JSON.parse(event.data);
+                    setMessages((msgs) => [...msgs, parsed]);
+                },
+                onclose() {
+                    console.log("Disconnected from event source");
+                },
+                onerror(e) {
+                    console.log("Event stream error", e);
+                }
+            });
+        }
+        
+        fetchMessage();
+    }, []);
+          
     function getData() {
         console.log("Getting board");
         fetch('http://localhost:8080/board')
@@ -44,10 +79,9 @@ function Board({state}) {
             method: 'DELETE'
         })
             .then((resp) => {
-                if (resp.status !== 200)
-                    throw new Error('Delete error: ' + resp.body);
-                else
+                if (resp.ok)
                     return resp.json();
+                throw new Error('Delete error: ' + resp.body);
             })
             .catch((err) => {
                 console.log("Reset error: " + err.message);
@@ -72,18 +106,19 @@ function Board({state}) {
             body: formData
         })
             .then((resp) => {
-                if (resp.status !== 200)
-                    throw new Error('Post error:' + resp.body);
-                else
+                if (resp.ok)
                     return resp.json();
+                return JSON.stringify(resp.body);
             })
             .then((data) => {
                 setTheBoard(data.board);
-                if (data.winner === player)
+                if (data.winner === player) {
                     alert('Wow! You won!');
+                    doReset();
+                }
             })
             .catch((err) => {
-                console.log("Move error:" + err.message);
+                console.log("Move error: " + err.message);
             });
     }
 

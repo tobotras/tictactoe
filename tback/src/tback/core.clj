@@ -5,7 +5,11 @@
             [compojure.route :as route]
             [ring.middleware.json :as mw-json]
             [ring.middleware.params :as params]
-            [ring.middleware.defaults :as r]
+            [ring.middleware.defaults :as defaults]
+            [ring-sse-middleware.core    :as r]
+            [ring-sse-middleware.wrapper :as w]
+            [ring-sse-middleware.adapter.generic  :as g]
+            [ring.middleware.cors :as cors]
             [clojure.data.json :as json])
   (:gen-class))
 
@@ -13,9 +17,9 @@
                   [nil nil nil]
                   [nil nil nil]])
 (def board (atom empty-board))
+(def board-promise (atom (promise)))
 (def prev-player (atom nil))
-
-(defn def-headers [headers]
+(defn def-headers [& headers]
   {"Access-Control-Allow-Methods" "POST, OPTIONS, GET, DELETE"
    "Access-Control-Allow-Origin" (get headers "origin" "*")
    "Access-Control-Allow-Headers" "Content-Type"})
@@ -107,8 +111,27 @@
    :headers (def-headers headers)
    :body {:board @board}})
 
+(defn send-event []
+  (println "send-event!")
+  (if (= (deref @board-promise 10000 :timed-out) :changed)
+    (println " -> Sending new move!")
+    (println " -> Timeout"))
+  (swap! board-promise (fn [_] (promise)))
+  (json/write-str @board))
+
+(defn debug-show [a]
+  (print "DEBUG: ")
+  (clojure.pprint/pprint a)
+  a)
+
 (defn -main
   [& args]
+
+  (add-watch board :watch-changed
+             (fn [_ _ old new]
+               (when-not (= old new)
+                 (deliver @board-promise :changed))))
+  
   (defroutes app
     (GET "/board" req (board-state req))
     (DELETE "/board" req (board-reset req))
@@ -116,10 +139,30 @@
     (OPTIONS "/move" req (options req))
     (OPTIONS "/board" req (options req))
     (route/not-found "<h1>Page not found</h1>"))
+
   (jetty/run-jetty
    (-> app
        logger/wrap-with-logger
        mw-json/wrap-json-body
        mw-json/wrap-json-response
-       (r/wrap-defaults (assoc-in r/site-defaults [:security :anti-forgery] false)))
-   {:port 8080}))
+       (defaults/wrap-defaults (assoc-in defaults/site-defaults [:security :anti-forgery] false))
+       ;;FIXME: doesnt work at all
+       (cors/wrap-cors :access-control-allow-origin #"http://localhost:3000"
+                       :access-control-allow-methods [:get :put :post :delete :options])
+       (r/streaming-middleware
+        g/generate-stream {:request-matcher (partial r/uri-match "/events")
+                           :chunk-generator 
+                           (-> (fn [_] (send-event))
+                               w/wrap-sse-event
+                               w/wrap-pst
+                               debug-show
+                               )
+                           :empty-response {:status 200
+                                            :headers (merge {"Content-Type" "text/event-stream;charset=UTF-8"
+                                                             "Cache-Control" "no-cache, no-store, max-age=0, must-revalidate"
+                                                             "Pragma" "no-cache"}
+                                                            ;;FIXME: no CORS validation!
+                                                            (def-headers))}
+                           :max-connections 20}))
+   {:port 8080
+    :output-buffer-size 10}))
