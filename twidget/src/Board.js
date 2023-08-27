@@ -15,65 +15,52 @@ function streamToString(stream) {
 function moreMoves(board) {
     return []
         .concat(...board)
-        .filter(cell => cell === null)
+        .filter(c => c === null)
         .length > 0;
 }
 
 function Board({state}) {
     const [player, setPlayer] = state
-    console.log("Playing the game");
+    console.log(`state is ${state} of type ${typeof state}`);
+    console.log(`Playing the game, setPlayer is ${setPlayer} of type ${typeof setPlayer}`);
 
     const [theBoard, setTheBoard] = useState(emptyBoard);
-    const [messages, setMessages] = useState([]);
-    
+
     useEffect(() => {
         console.log("Board changed, it is now " + theBoard);
         if (!moreMoves(theBoard)) {
+            console.log("End of game!");
             alert("End of game!");
             setPlayer(null);
         }
-    }, [theBoard, setPlayer]);
-
+    }, [theBoard]);
+    
     useEffect(() => {
-        async function fetchMessage() {
-            console.log('Starting event stream');
-            fetch('http://localhost:8080/events', {
-                headers: { Accept: 'text/event-stream' },
-                onopen(res) {
-                    if (res.ok)
-                        console.log("Connected to event source");
-                },
-                onmessage(event) {
-                    console.log("Got event: " + event.data);
-                    const parsed = JSON.parse(event.data);
-                    setMessages((msgs) => [...msgs, parsed]);
-                },
-                onclose() {
-                    console.log("Disconnected from event source");
-                },
-                onerror(e) {
-                    console.log("Event stream error", e);
-                }
-            });
-        }
-        
-        fetchMessage();
+        new EventSource("http://localhost:8080/events")
+            .onmessage = (e) => {
+                console.log( `message: ${e.data}` );
+                setTheBoard(JSON.parse(e.data));
+            };
+        fetchBoard();
     }, []);
-          
-    function getData() {
-        console.log("Getting board");
+
+    function fetchBoard() {
         fetch('http://localhost:8080/board')
-            .then((resp) => resp.json())
+            .then((resp) => {
+                if (resp.ok) {
+                    return resp.json();
+                }
+                throw new Error('Board load error: ' + resp.body);
+            })
             .then((data) => {
-                console.log("Data obtained:" + data.board);
+                console.log("Got data from GET: " + data.board + ", setting the board!");
                 setTheBoard(data.board);
             })
             .catch((err) => {
-                // console.log(err.message);
-                alert(err);
-            });
+                console.log("Get error: " + err.message);
+            });               
     }
-
+    
     function doReset() {
         fetch('http://localhost:8080/board', {
             method: 'DELETE'
@@ -87,7 +74,6 @@ function Board({state}) {
                 console.log("Reset error: " + err.message);
             });
         console.log("Delete done, now get");
-        getData();
         setPlayer(null);
     }
 
@@ -106,16 +92,19 @@ function Board({state}) {
             body: formData
         })
             .then((resp) => {
-                if (resp.ok)
-                    return resp.json();
-                return JSON.stringify(resp.body);
+                const content = resp.json();
+                if (!resp.ok)
+                    alert(content.body);
+                console.log(JSON.stringify(content));
+                return content;
             })
             .then((data) => {
-                setTheBoard(data.board);
                 if (data.winner === player) {
                     alert('Wow! You won!');
                     doReset();
                 }
+                console.log(`data from move: ${JSON.stringify(data.board)}`);
+                setTheBoard(data.board);
             })
             .catch((err) => {
                 console.log("Move error: " + err.message);

@@ -17,7 +17,6 @@
                   [nil nil nil]
                   [nil nil nil]])
 (def board (atom empty-board))
-(def board-promise (atom (promise)))
 (def prev-player (atom nil))
 (defn def-headers [& headers]
   {"Access-Control-Allow-Methods" "POST, OPTIONS, GET, DELETE"
@@ -25,7 +24,9 @@
    "Access-Control-Allow-Headers" "Content-Type"})
 
 (defn board-reset [{:keys [headers]}]
+  (print "Resetting board:")
   (swap! board (fn [_] empty-board))
+  (swap! prev-player (fn [_] (atom nil)))
   (clojure.pprint/pprint @board)
   {:status 200
    :headers (def-headers headers)
@@ -106,17 +107,14 @@
    :body {:status "OK, go ahead"}})
 
 (defn board-state [{:keys [headers]}]
+  (println "board-state:")
   (clojure.pprint/pprint @board)
   {:status 200
    :headers (def-headers headers)
    :body {:board @board}})
 
 (defn send-event []
-  (println "send-event!")
-  (if (= (deref @board-promise 10000 :timed-out) :changed)
-    (println " -> Sending new move!")
-    (println " -> Timeout"))
-  (swap! board-promise (fn [_] (promise)))
+  (println "-> send-event!")
   (json/write-str @board))
 
 (defn debug-show [a]
@@ -126,11 +124,6 @@
 
 (defn -main
   [& args]
-
-  (add-watch board :watch-changed
-             (fn [_ _ old new]
-               (when-not (= old new)
-                 (deliver @board-promise :changed))))
   
   (defroutes app
     (GET "/board" req (board-state req))
@@ -153,10 +146,10 @@
         g/generate-stream {:request-matcher (partial r/uri-match "/events")
                            :chunk-generator 
                            (-> (fn [_] (send-event))
+                               (w/wrap-delay 3000)
                                w/wrap-sse-event
                                w/wrap-pst
-                               debug-show
-                               )
+                               debug-show)
                            :empty-response {:status 200
                                             :headers (merge {"Content-Type" "text/event-stream;charset=UTF-8"
                                                              "Cache-Control" "no-cache, no-store, max-age=0, must-revalidate"
