@@ -13,6 +13,8 @@ function streamToString(stream) {
 }
 
 function moreMoves(board) {
+    if (board === undefined)
+        return true;
     return []
         .concat(...board)
         .filter(c => c === null)
@@ -34,13 +36,17 @@ function Board({state}) {
             setPlayer(null);
         }
     }, [theBoard]);
-    
-    useEffect(() => {
+
+    function startEventStream() {
         new EventSource("http://localhost:8080/events")
             .onmessage = (e) => {
                 console.log( `message: ${e.data}` );
                 setTheBoard(JSON.parse(e.data));
             };
+    }
+    
+    useEffect(() => {
+        startEventStream();
         fetchBoard();
     }, []);
 
@@ -93,18 +99,23 @@ function Board({state}) {
         })
             .then((resp) => {
                 const content = resp.json();
-                if (!resp.ok)
-                    alert(content.body);
-                console.log(JSON.stringify(content));
+                if (!resp.ok) {
+                    console.log("BAD REQUEST!!");
+                    return content
+                        .then((c) => {return {...c, "failure": true}});
+                }
                 return content;
             })
             .then((data) => {
-                if (data.winner === player) {
-                    alert('Wow! You won!');
-                    doReset();
-                }
-                console.log(`data from move: ${JSON.stringify(data.board)}`);
-                setTheBoard(data.board);
+                console.log(`data from move: ${JSON.stringify(data)}`);
+                if (data.failure === undefined) {
+                    setTheBoard(data.board);
+                    if (data.winner === player) {
+                        alert('Wow! You won!');
+                        doReset();
+                    }
+                } else
+                    alert(data.status);
             })
             .catch((err) => {
                 console.log("Move error: " + err.message);

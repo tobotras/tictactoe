@@ -56,8 +56,8 @@
          first)))
 
 (defn post-move [{:keys [params headers]}]
-  ;;  (println "POST request:")
-  ;;  (clojure.pprint/pprint req)
+  (println "POST request:")
+  (clojure.pprint/pprint params)
   (let [{:keys [row col player]} params
         bad-request (fn [reason]
                       {:status 400
